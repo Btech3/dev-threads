@@ -5,7 +5,7 @@ import Message from './pages/message'
 import Connection from './pages/connection'
 import Discover from './pages/dicover'
 import CreatePost from './pages/createpost'
-import Layout from './pages/Layout'
+import Layout from './pages/layout'
 import Profile from './pages/profile'
 import { useAuth } from '@clerk/react'
 
