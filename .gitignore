@@ -1,8 +1,3 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
@@ -23,3 +18,50 @@ dist-ssr
 *.sln
 *.sw?
 .env
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local env files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Build output
+dist/
+**/dist/
+build/
+**/build/
+.vite/
+**/.vite/
+
+# Logs
+logs/
+**/logs/
+*.log
+frontend.log
+
+# Uploaded user content
+uploads/
+**/uploads/
+public/uploads/
+**/public/uploads/
+
+# OS and editor files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python environments and caches
+.venv/
+**/.venv/
+venv/
+**/venv/
+.cache/
+**/.cache/

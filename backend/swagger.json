@@ -1,0 +1,229 @@
+
+
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Dev Thread Social Media API",
+    "version": "1.0.0",
+    "description": "Complete REST API for Dev Thread social media platform",
+    "contact": {
+      "name": "Dev Thread Team",
+      "email": "support@devthread.com",
+      "url": "https://devthread.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Development server",
+      "variables": {
+        "protocol": {
+          "default": "http"
+        },
+        "host": {
+          "default": "localhost:5000"
+        }
+      }
+    },
+    {
+      "url": "https://api.devthread.com",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ClerkAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Clerk-ID",
+        "description": "Clerk User ID from authentication"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token authentication"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["_id", "email", "clerkId"],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "User unique identifier",
+            "example": "user_2zdFoZib5lNr614LgkONdD8WG32"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address",
+            "example": "admin@example.com"
+          },
+          "clerkId": {
+            "type": "string",
+            "description": "Clerk ID from authentication",
+            "example": "user_2zdFoZib5lNr614LgkONdD8WG32"
+          },
+          "full_name": {
+            "type": "string",
+            "description": "User full name",
+            "example": "John Warren"
+          },
+          "username": {
+            "type": "string",
+            "description": "Unique username",
+            "example": "john_warren"
+          },
+          "bio": {
+            "type": "string",
+            "description": "User bio/about section",
+            "example": "Dreamer | Learner | Doer"
+          },
+          "profile_picture": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to user profile picture",
+            "example": "https://images.unsplash.com/..."
+          },
+          "cover_photo": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to user cover photo",
+            "example": "https://images.unsplash.com/..."
+          },
+          "location": {
+            "type": "string",
+            "description": "User location",
+            "example": "New York, NY"
+          },
+          "followers": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of follower user IDs",
+            "example": ["user_2", "user_3"]
+          },
+          "following": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of following user IDs",
+            "example": ["user_2", "user_3"]
+          },
+          "is_verified": {
+            "type": "boolean",
+            "description": "Is user verified",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "User creation date",
+            "example": "2025-07-09T09:26:59.231Z"
+          }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "required": ["_id", "userId", "content"],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Post unique identifier",
+            "example": "68773e977db16954a783839c"
+          },
+          "userId": {
+            "type": "string",
+            "description": "ID of post creator",
+            "example": "user_2zdFoZib5lNr614LgkONdD8WG32"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "content": {
+            "type": "string",
+            "description": "Post text content",
+            "example": "We're a small team with a big vision"
+          },
+          "media": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" },
+            "description": "Array of image/video URLs",
+            "example": ["https://images.pexels.com/..."]
+          },
+          "likes_count": {
+            "type": "integer",
+            "description": "Number of likes",
+            "example": 45
+          },
+          "comments_count": {
+            "type": "integer",
+            "description": "Number of comments",
+            "example": 12
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-07-16T05:54:31.191Z"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": ["_id", "senderId", "recipientId", "content"],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "example": "msg_1"
+          },
+          "senderId": {
+            "type": "string",
+            "example": "user_2zdFoZib5lNr614LgkONdD8WG32"
+          },
+          "recipientId": {
+            "type": "string",
+            "example": "user_2"
+          },
+          "content": {
+            "type": "string",
+            "example": "Hey, how are you?"
+          },
+          "media_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "isRead": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-07-25T10:35:00.000Z"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Error message here"
+          },
+          "status": {
+            "type": "integer",
+            "example": 400
+          }
+        }
+      }
+    }
+  }
+}
