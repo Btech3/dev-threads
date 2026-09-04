@@ -19,7 +19,9 @@ export const initSocket = (httpServer) => {
     cors: {
       origin: [
         process.env.CLIENT_URL || 'http://localhost:5174',
-        process.env.FRONTEND_URL || 'http://localhost:5174'
+        process.env.FRONTEND_URL || 'http://localhost:5174',
+        'https://dev-threads-3.onrender.com',
+        'https://dev-threads-jybl.onrender.com'
       ],
       methods: ['GET', 'POST'],
       credentials: true

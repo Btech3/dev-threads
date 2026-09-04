@@ -109,7 +109,7 @@ export default function Feed() {
   const [isCreatingReel, setIsCreatingReel] = useState(false);
   const [reelSuccessMessage, setReelSuccessMessage] = useState('');
 
-  const BACKEND_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5234';
+  const BACKEND_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'https://dev-threads-2.onrender.com';
 
   const resolveMediaUrl = (mediaUrl) => {
     if (!mediaUrl) return '';

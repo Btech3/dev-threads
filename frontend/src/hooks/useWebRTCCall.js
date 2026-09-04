@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 
 const normalizeSocketUrl = (url) => {
-  if (!url) return 'http://localhost:5234';
+  if (!url) return 'https://dev-threads-2.onrender.com';
   let value = String(url).trim();
   value = value.replace(/:\s*$/, '');
   value = value.replace(/localhost(\d{2,5})/i, 'localhost:$1');
@@ -10,7 +10,7 @@ const normalizeSocketUrl = (url) => {
   return value;
 };
 
-const SOCKET_URL = normalizeSocketUrl(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5234');
+const SOCKET_URL = normalizeSocketUrl(import.meta.env.VITE_SOCKET_URL || 'https://dev-threads-2.onrender.com');
 
 export function useWebRTCCall() {
   const socketRef = useRef(null);

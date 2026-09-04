@@ -34,7 +34,7 @@ services:
       - key: INNGEST_SIGNING_KEY
         sync: false
       - key: FRONTEND_URL
-        sync: false
+        value: https://dev-threads-3.onrender.com
       - key: SEND_EMAIL_NOTIFICATIONS
         value: "false"
 

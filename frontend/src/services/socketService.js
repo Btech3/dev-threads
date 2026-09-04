@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 // Normalize socket URL from env to avoid malformed values like "http://localhost5234:"
 const rawSocketUrl = import.meta.env.VITE_SOCKET_URL;
 function normalizeSocketUrl(url) {
-  if (!url) return 'http://localhost:5234';
+  if (!url) return 'https://dev-threads-2.onrender.com';
   let s = String(url).trim();
   // Remove accidental trailing colons
   s = s.replace(/:\s*$/,'');
@@ -16,7 +16,7 @@ function normalizeSocketUrl(url) {
   return s;
 }
 
-const SOCKET_URL = normalizeSocketUrl(rawSocketUrl) || 'http://localhost:5234';
+const SOCKET_URL = normalizeSocketUrl(rawSocketUrl) || 'https://dev-threads-2.onrender.com';
 
 class SocketService {
   constructor() {

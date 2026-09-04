@@ -318,7 +318,7 @@ export default function Profile() {
     const url = String(mediaUrl).trim();
     if (/^https?:\/\//i.test(url)) return url;
     if (/^\/\//.test(url)) return `https:${url}`;
-    return url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5234'}${url}` : `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5234'}/${url}`;
+    return url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'https://dev-threads-2.onrender.com'}${url}` : `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') || 'https://dev-threads-2.onrender.com'}/${url}`;
   };
 
   const getPostMedia = (post) => {

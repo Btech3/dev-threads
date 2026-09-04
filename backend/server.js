@@ -50,7 +50,12 @@ app.use(cors({
         }
         
         // In production, check against allowed origins
-        const allowedOrigins = [process.env.FRONTEND_URL || "http://localhost:5173"];
+        const allowedOrigins = [
+          process.env.FRONTEND_URL,
+          'https://dev-threads-3.onrender.com',
+          'https://dev-threads-jybl.onrender.com',
+          'http://localhost:5173'
+        ].filter(Boolean);
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
