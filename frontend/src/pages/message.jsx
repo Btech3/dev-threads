@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { X, Search, Phone, Video, Info, Paperclip, Smile, Mic, Send, Plus, Check } from 'lucide-react';
-import { assets, menuItemsData } from '../assets/assets.js';
+import { useParams } from 'react-router-dom';
+import { ArrowLeft, X, Search, Phone, Video, Info, Paperclip, Smile, Mic, Send, Plus, Check } from 'lucide-react';
+import { assets } from '../assets/assets.js';
 import { messageService } from '../services/messageServices.js';
 import { socketService } from '../services/socketService.js';
 import { useApp } from '../context/AppContext';
@@ -14,7 +14,7 @@ export default function Message() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -278,49 +278,18 @@ export default function Message() {
     <div className="min-h-screen bg-[#f8fafc] font-sans antialiased text-slate-800 w-full relative">
       
       {/* CORE DASHBOARD CONTENT GRID */}
-      <main className="mx-auto min-h-[calc(100dvh-3.5rem)] w-full max-w-7xl overflow-x-hidden bg-slate-50 p-4 sm:p-6 md:p-8 xl:p-12">
+      <main className="mx-auto flex h-[calc(100dvh-3.5rem)] w-full max-w-7xl min-w-0 flex-col overflow-hidden bg-slate-50 p-4 sm:h-[100dvh] sm:p-6 md:p-8 xl:p-10">
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Messages</h1>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm">Talk to your friends and family</p>
         </header>
 
-        <div className="grid min-w-0 grid-cols-12 gap-4 xl:gap-6">
-          {/* Left Nav */}
-          <nav className="col-span-12 hidden rounded-2xl border border-slate-200 bg-white p-4 lg:sticky lg:top-6 lg:col-span-2 lg:flex lg:h-[80vh] lg:flex-col lg:justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <img src={assets.logo} alt="pingup" className="w-8 h-8" />
-                <span className="font-bold text-lg text-slate-900">pingup</span>
-              </div>
-              <ul className="space-y-2">
-                {menuItemsData.map((item) => (
-                  <li key={item.label}>
-                    <Link to={item.to} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${item.label === 'Messages' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}>
-                      <item.Icon className="w-5 h-5" />
-                      <span className="text-sm">{item.label}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <button className="w-full mb-4 bg-indigo-600 text-white rounded-full py-2 font-semibold">+ Create Post</button>
-              <div className="flex items-center gap-3">
-                <img src={getAvatar(user)} alt={user?.full_name || 'You'} className="w-12 h-12 rounded-full object-cover" />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold">{user?.full_name || 'John Warren'}</div>
-                  <div className="text-xs text-slate-400">@{user?.username || 'john_warren'}</div>
-                </div>
-                <button title="Logout" className="text-slate-400 hover:text-slate-600"> <X className="w-4 h-4" /> </button>
-              </div>
-            </div>
-          </nav>
-
-          {/* Conversations panel */}
-          <aside className="col-span-12 min-w-0 lg:col-span-3">
-            <div className="space-y-4">
-              <div className="relative">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-12 gap-3 overflow-hidden xl:gap-5">
+          {/* Conversation list: full width until a chat is selected on mobile, then hidden. */}
+          <aside className={`${selectedUser ? 'hidden md:block' : 'col-span-12'} min-h-0 min-w-0 md:col-span-4 lg:col-span-3`}>
+            <div className="flex h-full min-h-0 flex-col gap-3">
+              <div className="space-y-4">
+                <div className="relative">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-semibold">Messages</h2>
                   <button className="p-2 rounded-lg bg-indigo-50 text-indigo-600"><Plus className="w-4 h-4" /></button>
@@ -333,9 +302,9 @@ export default function Message() {
                   placeholder="Search chats..."
                   className="w-full rounded-full border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                 />
-              </div>
+                </div>
 
-              <div className="mt-4 overflow-y-auto max-h-[68vh] space-y-2">
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
                 {isLoading ? (
                   <div className="text-center text-slate-500 py-6">Loading conversations...</div>
                 ) : filteredConversations.length === 0 ? (
@@ -361,29 +330,32 @@ export default function Message() {
                     );
                   })
                 )}
+                </div>
               </div>
             </div>
           </aside>
 
-          {/* Middle: thread */}
-          <section className="col-span-12 min-w-0 lg:col-span-5">
-            <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden h-full flex flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
+          <section className={`${selectedUser ? 'col-span-12' : 'hidden md:block'} min-h-0 min-w-0 md:col-span-8 lg:col-span-6`}>
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 p-3 sm:p-4">
                 <div className="flex items-center gap-3">
+                  <button type="button" aria-label="Back to conversations" onClick={() => setSelectedUser(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-50 md:hidden">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
                   <img src={getAvatar(selectedUser)} alt={selectedUser?.full_name} className="w-10 h-10 rounded-full object-cover" />
                   <div>
                     <div className="font-semibold">{selectedUser?.full_name || 'Select a chat'}</div>
                     <div className="text-xs text-green-500">{selectedUser ? 'Active now' : ''}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center gap-1 sm:gap-3">
                   <button className="p-2 rounded-lg hover:bg-slate-50"><Phone className="w-4 h-4" /></button>
                   <button className="p-2 rounded-lg hover:bg-slate-50"><Video className="w-4 h-4" /></button>
                   <button onClick={() => setShowRightPanel(!showRightPanel)} className="p-2 rounded-lg hover:bg-slate-50"><Info className="w-4 h-4" /></button>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F8FAFC]">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#F8FAFC] p-3 sm:p-4">
                 {/* Date divider */}
                 <div className="text-xs text-slate-400 text-center">TODAY</div>
 
@@ -426,7 +398,7 @@ export default function Message() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="border-t border-slate-100 p-4 bg-white">
+              <div className="shrink-0 border-t border-slate-100 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
                 <div className="space-y-2">
                   {/* Previews */}
                   {filePreviews.length > 0 && (
@@ -440,7 +412,7 @@ export default function Message() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
                     <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-slate-50"><Paperclip className="w-5 h-5 text-slate-500" /></button>
                     <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" multiple onChange={handleFileSelect} className="hidden" />
 
@@ -461,7 +433,7 @@ export default function Message() {
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                       placeholder="Type a message..."
-                      className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none"
+                      className="min-w-0 w-full max-w-full flex-1 rounded-full border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none sm:px-4"
                       disabled={!selectedUser}
                     />
 
@@ -481,8 +453,8 @@ export default function Message() {
           </section>
 
           {/* Right details */}
-          <aside className={`${showRightPanel ? 'col-span-12 lg:col-span-2' : 'hidden'}`}>
-            <div className="bg-white border border-slate-100 rounded-2xl p-6 space-y-4 sticky top-6">
+          <aside className={`${showRightPanel ? 'fixed inset-y-14 right-0 z-30 block w-[min(22rem,92vw)] border-l border-slate-200 bg-white shadow-xl lg:static lg:col-span-3 lg:w-auto lg:border-0 lg:shadow-none' : 'hidden'} min-h-0 min-w-0`}>
+            <div className="h-full overflow-y-auto rounded-2xl border border-slate-100 bg-white p-4 space-y-4 lg:p-6">
               {selectedUser ? (
                 <>
                   <div className="flex flex-col items-center">
