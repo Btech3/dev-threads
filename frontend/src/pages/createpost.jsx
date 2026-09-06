@@ -10,9 +10,9 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Menu, X, Image as ImageIcon, Loader, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, Image as ImageIcon, Loader, AlertCircle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { assets, menuItemsData } from '../assets/assets.js';
+import { assets } from '../assets/assets.js';
 import { postService } from '../services/postService.js';
 import { useAppAuth } from '../context/AuthContext';
 
@@ -30,7 +30,6 @@ export default function Createpost() {
   // STATE MANAGEMENT
   // ============================================
   
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [postContent, setPostContent] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreview, setFilePreview] = useState([]);
@@ -233,65 +232,10 @@ export default function Createpost() {
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans antialiased text-slate-800 w-full relative">
       
-      {/* MOBILE HEADER BUTTON */}
-      <button
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="fixed top-4 left-4 z-50 p-2 text-slate-600 hover:text-slate-800 md:hidden"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      {/* MOBILE OVERLAY NAVIGATION */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-100 flex flex-col justify-between p-4 h-full transform transition-transform duration-300 ease-in-out md:hidden
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="space-y-6">
-          <div className="px-3 py-2 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <img src={assets.logo} alt="Logo" className="h-6 w-auto" />
-              <span className="text-xl font-bold text-[#5c33f6]">Group</span>
-            </div>
-            <button onClick={() => setIsMobileMenuOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <nav className="space-y-1">
-            {menuItemsData.map((item, index) => {
-              const IconComponent = item.Icon;
-              return (
-                <a
-                  key={index}
-                  href={item.to}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                    item.label === 'Create Post' ? 'bg-[#eef0ff] text-[#5c33f6]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
-                  <IconComponent className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </a>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="border-t border-slate-100 pt-4 flex items-center space-x-3">
-          <img src={getAvatar(currentUser)} alt={currentUser.full_name} className="w-10 h-10 rounded-full object-cover" />
-          <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-semibold text-slate-800 truncate">{currentUser.full_name}</h4>
-            <span className="text-xs text-slate-400 truncate block">@{currentUser.username}</span>
-          </div>
-        </div>
-      </div>
-
-      {isMobileMenuOpen && (
-        <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden" />
-      )}
-
       {/* MAIN CONTENT */}
-      <main className="p-6 sm:p-8 md:p-12 max-w-3xl w-full mx-auto">
-        <header className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Create Post</h1>
+      <main className="mx-auto min-h-[calc(100dvh-3.5rem)] w-full max-w-3xl overflow-x-hidden px-4 py-5 sm:px-6 sm:py-8 md:px-10 md:py-12">
+        <header className="mb-6 sm:mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">Create Post</h1>
           <p className="text-slate-500 mt-2 text-sm sm:text-base">Share your thoughts, media, and ideas with the world</p>
         </header>
 
@@ -316,7 +260,7 @@ export default function Createpost() {
         {/* POST FORM */}
         <form onSubmit={handlePublishPost} className="space-y-6">
           {/* USER INFO CARD */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center space-x-4">
               <img 
                 src={getAvatar(currentUser)} 
@@ -331,7 +275,7 @@ export default function Createpost() {
           </div>
 
           {/* CONTENT TEXTAREA */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6">
             <textarea
               value={postContent}
               onChange={(e) => {
@@ -401,12 +345,12 @@ export default function Createpost() {
           />
 
           {/* ACTION BUTTONS */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:gap-4 sm:p-6">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting || selectedFiles.length >= 5}
-              className="p-2.5 text-slate-600 hover:text-[#5c33f6] hover:bg-slate-50 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              className="flex w-full items-center justify-center space-x-2 rounded-xl p-2.5 text-slate-600 transition-all hover:bg-slate-50 hover:text-[#5c33f6] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <ImageIcon className="w-5 h-5" />
               <span className="text-sm font-medium">Add Media</span>
@@ -420,7 +364,7 @@ export default function Createpost() {
             <button 
               type="submit"
               disabled={!postContent.trim() || isSubmitting}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center space-x-2 ${
+              className={`flex w-full items-center justify-center space-x-2 rounded-xl px-6 py-2.5 text-sm font-bold shadow-sm transition-all sm:w-auto ${
                 postContent.trim() && !isSubmitting
                   ? 'bg-[#5c33f6] text-white hover:bg-[#4a24e3] active:scale-95 cursor-pointer' 
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'

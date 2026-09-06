@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Menu, X, Search, Phone, Video, Info, Paperclip, Smile, Mic, Send, Plus, Check } from 'lucide-react';
+import { X, Search, Phone, Video, Info, Paperclip, Smile, Mic, Send, Plus, Check } from 'lucide-react';
 import { assets, menuItemsData } from '../assets/assets.js';
 import { messageService } from '../services/messageServices.js';
 import { socketService } from '../services/socketService.js';
@@ -8,7 +8,6 @@ import { useApp } from '../context/AppContext';
 
 export default function Message() {
   const { userId } = useParams();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useApp();
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -278,78 +277,7 @@ export default function Message() {
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans antialiased text-slate-800 w-full relative">
       
-      {/* 1. MOBILE ONLY TOP ACTION BAR */}
-      {/* 'justify-end' pushes your hamburger button directly to the top right edge, hiding brand text/logos entirely */}
-
-      {/* 2. MOBILE DRAWER OVERLAY PANEL (Triggers when state = true) */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-100 flex flex-col justify-between p-4 h-full transform transition-transform duration-300 ease-in-out md:hidden
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="space-y-6">
-          {/* Drawer Header Layout */}
-          <div className="px-3 py-2 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <img src={assets.logo} alt="Logo" className="h-6 w-auto" />
-              <span className="text-xl font-bold text-[#5c33f6]">Group</span>
-            </div>
-            {/* Close Button UI */}
-            <button 
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Render Items Links Layout */}
-          <nav className="space-y-1">
-            {menuItemsData.map((item, index) => {
-              const IconComponent = item.Icon;
-              const isMessagesActive = item.label === 'Messages';
-              
-              return (
-                <a
-                  key={index}
-                  href={item.to}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                    isMessagesActive
-                      ? 'bg-[#eef0ff] text-[#5c33f6]'
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
-                  <IconComponent className={`w-5 h-5 ${isMessagesActive ? 'text-[#5c33f6]' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                </a>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Current Identity Meta Card Block */}
-        <div className="border-t border-slate-100 pt-4 flex items-center space-x-3">
-          <img 
-            src={getAvatar(user)} 
-            alt={user?.full_name || 'You'} 
-            className="w-10 h-10 rounded-full bg-slate-200 object-cover"
-          />
-          <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-semibold text-slate-800 leading-tight truncate">{user?.full_name || 'You'}</h4>
-            <span className="text-xs text-slate-400 truncate block">@{user?.username || 'me'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. TRANSPARENT DRAWER BACKDROP MODAL */}
-      {isMobileMenuOpen && (
-        <div 
-          onClick={() => setIsMobileMenuOpen(false)}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden"
-        />
-      )}
-
-      {/* 4. CORE DASHBOARD CONTENT GRID PLATFORM */}
+      {/* CORE DASHBOARD CONTENT GRID */}
       <main className="mx-auto min-h-[calc(100dvh-3.5rem)] w-full max-w-7xl overflow-x-hidden bg-slate-50 p-4 sm:p-6 md:p-8 xl:p-12">
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Messages</h1>
