@@ -2,3 +2,55 @@
 
 @import "tailwindcss";
 
+:root {
+	color-scheme: light;
+	font-family: 'Poppins', sans-serif;
+	text-rendering: optimizeLegibility;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	min-width: 320px;
+	overflow-x: hidden;
+	background: #f1f5f9;
+}
+
+body,
+#root {
+	min-height: 100%;
+	margin: 0;
+	overflow-x: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+	max-width: 100%;
+	font: inherit;
+}
+
+img,
+video,
+canvas,
+svg {
+	max-width: 100%;
+}
+
+@media (max-width: 639px) {
+	input,
+	textarea,
+	select {
+		font-size: 16px;
+	}
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+	body {
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+}
+

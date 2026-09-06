@@ -350,15 +350,15 @@ export default function Message() {
       )}
 
       {/* 4. CORE DASHBOARD CONTENT GRID PLATFORM */}
-      <main className="p-6 sm:p-8 md:p-12 max-w-7xl w-full mx-auto bg-slate-50 min-h-screen">
+      <main className="mx-auto min-h-[calc(100dvh-3.5rem)] w-full max-w-7xl overflow-x-hidden bg-slate-50 p-4 sm:p-6 md:p-8 xl:p-12">
         <header className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Messages</h1>
           <p className="text-slate-500 mt-1 text-xs sm:text-sm">Talk to your friends and family</p>
         </header>
 
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid min-w-0 grid-cols-12 gap-4 xl:gap-6">
           {/* Left Nav */}
-          <nav className="col-span-12 lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-4 sticky top-6 h-[80vh] flex flex-col justify-between">
+          <nav className="col-span-12 hidden rounded-2xl border border-slate-200 bg-white p-4 lg:sticky lg:top-6 lg:col-span-2 lg:flex lg:h-[80vh] lg:flex-col lg:justify-between">
             <div>
               <div className="flex items-center gap-3 mb-6">
                 <img src={assets.logo} alt="pingup" className="w-8 h-8" />
@@ -390,7 +390,7 @@ export default function Message() {
           </nav>
 
           {/* Conversations panel */}
-          <aside className="col-span-12 lg:col-span-3">
+          <aside className="col-span-12 min-w-0 lg:col-span-3">
             <div className="space-y-4">
               <div className="relative">
                 <div className="flex items-center justify-between mb-3">
@@ -438,7 +438,7 @@ export default function Message() {
           </aside>
 
           {/* Middle: thread */}
-          <section className="col-span-12 lg:col-span-5">
+          <section className="col-span-12 min-w-0 lg:col-span-5">
             <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden h-full flex flex-col">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
                 <div className="flex items-center gap-3">
@@ -468,8 +468,8 @@ export default function Message() {
                   return (
                     <div key={msg._id || Math.random()} className={`flex items-end ${isMe ? 'justify-end' : 'justify-start'}`}>
                       {!isMe && <img src={getAvatar(selectedUser)} alt="avatar" className="w-8 h-8 rounded-full mr-2" />}
-                      <div className={`rounded-2xl p-3 max-w-[68%] ${isMe ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-900'}`}>
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      <div className={`max-w-[85%] rounded-2xl p-3 sm:max-w-[68%] ${isMe ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-900'}`}>
+                        <div className="break-words whitespace-pre-wrap">{msg.content}</div>
                         <div className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'} flex items-center gap-2 justify-end`}>
                           <span>{new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                           {isMe && <Check className="w-3 h-3" />}
