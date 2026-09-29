@@ -1,5 +1,6 @@
 import ImageKit from 'imagekit';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -11,11 +12,21 @@ dotenv.config();
  * Why: Images load faster, save storage, automatic optimization
  * How: Initialize with API keys, use to upload files
  */
-export const imageKit = new ImageKit({
+const imageKitConfig = {
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
   privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
-});
+};
+
+const imageKitConfigured = Object.values(imageKitConfig).every(Boolean);
+
+export const imageKit = imageKitConfigured ? new ImageKit(imageKitConfig) : null;
+
+export const assertImageKitConfigured = () => {
+  if (!imageKit) {
+    throw new Error('ImageKit is not configured. Set IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY, and IMAGEKIT_URL_ENDPOINT.');
+  }
+};
 
 /**
  * Upload image to ImageKit
@@ -23,6 +34,7 @@ export const imageKit = new ImageKit({
  */
 export const uploadToImageKit = async (filePath, fileName) => {
   try {
+    assertImageKitConfigured();
     const response = await imageKit.upload({
       file: fs.readFileSync(filePath),
       fileName: fileName,
@@ -44,6 +56,7 @@ export const uploadToImageKit = async (filePath, fileName) => {
  */
 export const deleteFromImageKit = async (fileId) => {
   try {
+    assertImageKitConfigured();
     await imageKit.deleteFile(fileId);
     return true;
   } catch (error) {

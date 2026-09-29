@@ -127,7 +127,6 @@
 
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
 import { verifyClerkToken } from '../middleware/auth.js';
 import {
   getFeed,
@@ -154,7 +153,7 @@ const router = express.Router();
 /**
  * Configure Multer for post media uploads
  * 
- * Storage: Disk storage in ./uploads directory
+ * Storage: Memory storage before upload to ImageKit
  * File size limit: 10MB per file
  * Max files: 5 per request
  * Supported formats: 
@@ -162,19 +161,8 @@ const router = express.Router();
  *   - Videos: mp4, webm, mov
  *   - Documents: pdf, docx, doc
  */
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, './uploads/posts');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, uniqueSuffix + ext);
-  }
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
   fileFilter: (req, file, cb) => {
     // Accept both images and videos

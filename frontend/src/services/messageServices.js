@@ -43,6 +43,7 @@ class MessageService {
         method: 'GET',
         headers: this.getHeaders()
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch conversations`);
       return response.json();
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -57,6 +58,7 @@ class MessageService {
         method: 'GET',
         headers: this.getHeaders()
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch messages`);
       return response.json();
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -104,6 +106,10 @@ class MessageService {
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (clerkId) headers['x-clerk-id'] = clerkId;
+      const userEmail = localStorage.getItem('userEmail');
+      const userName = localStorage.getItem('userName');
+      if (userEmail) headers['x-clerk-email'] = userEmail;
+      if (userName) headers['x-clerk-name'] = userName;
 
       const response = await fetch(`${API_BASE_URL}/upload/message-media`, {
         method: 'POST',
@@ -113,7 +119,10 @@ class MessageService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Failed to upload media files');
+        const error = new Error(errorData?.error || errorData?.message || `HTTP ${response.status}: Failed to upload media files`);
+        error.status = response.status;
+        error.body = errorData;
+        throw error;
       }
 
       return await response.json();

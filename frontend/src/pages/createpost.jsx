@@ -363,9 +363,9 @@ export default function Createpost() {
 
             <button 
               type="submit"
-              disabled={!postContent.trim() || isSubmitting}
+              disabled={(!postContent.trim() && selectedFiles.length === 0) || isSubmitting}
               className={`flex w-full items-center justify-center space-x-2 rounded-xl px-6 py-2.5 text-sm font-bold shadow-sm transition-all sm:w-auto ${
-                postContent.trim() && !isSubmitting
+                (postContent.trim() || selectedFiles.length > 0) && !isSubmitting
                   ? 'bg-[#5c33f6] text-white hover:bg-[#4a24e3] active:scale-95 cursor-pointer' 
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}

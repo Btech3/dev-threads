@@ -24,7 +24,8 @@ const messageSchema = new mongoose.Schema({
       url: String,
       type: String,
       mimetype: String,
-      size: Number
+      size: Number,
+      fileName: String
     }
   ],
   isRead: {

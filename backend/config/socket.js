@@ -1,4 +1,6 @@
 import { Server as SocketIO } from 'socket.io';
+import { verifyToken as verifyClerkJwt } from '@clerk/backend';
+import User from '../models/User.js';
 
 let io = null;
 const onlineUsers = new Map();
@@ -27,6 +29,29 @@ export const initSocket = (httpServer) => {
       credentials: true
     },
     transports: ['websocket', 'polling']
+  });
+
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token || !process.env.CLERK_SECRET_KEY) {
+        return next(new Error('Socket authentication required'));
+      }
+
+      const claims = await verifyClerkJwt(token, { secretKey: process.env.CLERK_SECRET_KEY });
+      const clerkId = claims?.sub;
+      if (!clerkId) return next(new Error('Socket token has no Clerk subject'));
+
+      const user = await User.findOne({ clerkId }).select('_id clerkId full_name');
+      if (!user?._id) return next(new Error('Socket user not found'));
+
+      socket.data.userId = String(user._id);
+      socket.data.clerkId = clerkId;
+      return next();
+    } catch (error) {
+      console.error('Socket authentication failed:', error?.message || error);
+      return next(new Error('Socket authentication failed'));
+    }
   });
 
   // Connection handler
@@ -63,49 +88,37 @@ export const initSocket = (httpServer) => {
       }
     });
 
-    socket.on('call-user', ({ userToCall, targetUserId, from, fromUserId, signalData, offer, isVideo }) => {
-      const toUserId = userToCall || targetUserId;
-      if (!toUserId) return;
-      const payload = {
-        from: from || fromUserId || socket.id,
-        signal: signalData || offer || null,
-        isVideo: Boolean(isVideo)
-      };
-      socket.to(`user-${toUserId}`).emit('incoming-call', payload);
-      console.log(`📞 Call signaling: ${payload.from} -> ${toUserId} (${payload.isVideo ? 'video' : 'voice'})`);
+    socket.on('call:initiate', ({ to, offer, isVideo }) => {
+      if (!to || !offer) return socket.emit('call:failed', { error: 'Call target and offer are required' });
+      io.to(`user-${to}`).emit('call:ring', { from: socket.data.userId, offer, isVideo: Boolean(isVideo) });
     });
 
-    socket.on('answer-call', ({ to, targetUserId, fromUserId, signal, answer }) => {
-      const toUserId = to || targetUserId;
-      if (!toUserId) return;
-      socket.to(`user-${toUserId}`).emit('call-accepted', {
-        from: fromUserId || socket.id,
-        signal: signal || answer || null
-      });
+    socket.on('call:accept', ({ to, answer }) => {
+      if (!to || !answer) return socket.emit('call:failed', { error: 'Call target and answer are required' });
+      io.to(`user-${to}`).emit('call:answer', { from: socket.data.userId, answer });
     });
 
-    socket.on('ice-candidate', ({ to, targetUserId, senderId, candidate }) => {
-      const toUserId = to || targetUserId;
-      if (!toUserId || !candidate) return;
-      socket.to(`user-${toUserId}`).emit('ice-candidate', {
-        senderId: senderId || socket.id,
-        candidate
-      });
+    socket.on('call:reject', ({ to, reason }) => {
+      if (to) io.to(`user-${to}`).emit('call:reject', { from: socket.data.userId, reason: reason || 'Call rejected' });
     });
 
-    socket.on('end-call', ({ to, targetUserId }) => {
-      const toUserId = to || targetUserId;
-      if (!toUserId) return;
-      socket.to(`user-${toUserId}`).emit('call-ended', {
-        from: socket.id
-      });
-      console.log(`📞 Call ended signal sent to ${toUserId}`);
+    socket.on('call:cancel', ({ to }) => {
+      if (to) io.to(`user-${to}`).emit('call:cancel', { from: socket.data.userId });
+    });
+
+    socket.on('call:ice-candidate', ({ to, candidate }) => {
+      if (!to || !candidate) return;
+      io.to(`user-${to}`).emit('call:ice-candidate', { from: socket.data.userId, candidate });
+    });
+
+    socket.on('call:end', ({ to }) => {
+      if (to) io.to(`user-${to}`).emit('call:end', { from: socket.data.userId });
     });
 
     // Join a user-specific room for personal notifications/messages
-    socket.on('join-user', (userId) => {
-      if (!userId) return;
-      const normalizedUserId = String(userId);
+    socket.on('join-user', () => {
+      const normalizedUserId = socket.data.userId;
+      if (!normalizedUserId) return;
       socket.join(`user-${normalizedUserId}`);
       socket.userId = normalizedUserId;
       onlineUsers.set(normalizedUserId, { socketId: socket.id, lastSeen: new Date() });
@@ -114,7 +127,8 @@ export const initSocket = (httpServer) => {
       console.log(`📍 Socket ${socket.id} joined user room: user-${normalizedUserId}`);
     });
 
-    socket.on('leave-user', (userId) => {
+    socket.on('leave-user', () => {
+      const userId = socket.data.userId;
       if (!userId) return;
       socket.leave(`user-${userId}`);
       onlineUsers.delete(String(userId));
@@ -127,6 +141,14 @@ export const initSocket = (httpServer) => {
       if (!roomId) return;
       socket.join(roomId);
       console.log(`📍 Socket ${socket.id} joined room: ${roomId}`);
+    });
+
+    socket.on('typing', ({ to, typing }) => {
+      if (!to) return;
+      io.to(`user-${to}`).emit('typing', {
+        from: socket.data.userId,
+        typing: Boolean(typing)
+      });
     });
 
     socket.on('leave-room', (roomId) => {

@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import io from 'socket.io-client';
-
-const normalizeSocketUrl = (url) => {
-  if (!url) return 'https://dev-threads-2.onrender.com';
-  let value = String(url).trim();
-  value = value.replace(/:\s*$/, '');
-  value = value.replace(/localhost(\d{2,5})/i, 'localhost:$1');
-  if (!/^[a-zA-Z]+:\/\//.test(value)) value = `http://${value}`;
-  return value;
-};
-
-const SOCKET_URL = normalizeSocketUrl(import.meta.env.VITE_SOCKET_URL || 'https://dev-threads-2.onrender.com');
+import { socketService } from '../services/socketService.js';
 
 export function useWebRTCCall() {
   const socketRef = useRef(null);
@@ -21,6 +10,12 @@ export function useWebRTCCall() {
   const [remoteStream, setRemoteStream] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [callStatus, setCallStatus] = useState('idle');
+  const [callError, setCallError] = useState('');
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [isVideoCall, setIsVideoCall] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+  const pendingOfferRef = useRef(null);
 
   const getCurrentUserId = useCallback(() => {
     return localStorage.getItem('backendUserId') || localStorage.getItem('clerkId') || null;
@@ -34,6 +29,10 @@ export function useWebRTCCall() {
     localStreamRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
+    setIncomingCall(null);
+    setIsVideoCall(false);
+    setIsMuted(false);
+    setIsCameraOff(false);
   }, []);
 
   const createPeerConnection = useCallback(async (targetUserId, isVideo = true) => {
@@ -50,9 +49,8 @@ export function useWebRTCCall() {
 
     pc.onicecandidate = (event) => {
       if (event.candidate && socketRef.current && targetUserId) {
-        socketRef.current.emit('ice-candidate', {
+        socketService.send('call:ice-candidate', {
           to: targetUserId,
-          senderId: getCurrentUserId(),
           candidate: event.candidate,
         });
       }
@@ -78,19 +76,23 @@ export function useWebRTCCall() {
     return pc;
   }, [getCurrentUserId]);
 
-  const ensureSocket = useCallback(() => {
-    if (socketRef.current) return socketRef.current;
+  const reportCallError = useCallback((context, error) => {
+    const detail = error?.message || String(error || 'Unknown error');
+    const message = `${context}: ${detail}`;
+    console.error(`[WebRTC] ${message}`, error);
+    setCallError(message);
+  }, []);
 
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-    });
+  const ensureSocket = useCallback(() => {
+    const socket = socketService.getSocket();
+    if (socketRef.current === socket) return socket;
+
+    socketRef.current = socket;
 
     socket.on('connect', () => {
       setIsConnected(true);
       const currentUserId = getCurrentUserId();
       if (currentUserId) socket.emit('join-user', currentUserId);
-      setCallStatus('connected');
     });
 
     socket.on('disconnect', () => {
@@ -98,105 +100,144 @@ export function useWebRTCCall() {
       setCallStatus('disconnected');
     });
 
-    socket.on('incoming-call', async ({ from, signal, isVideo }) => {
+    const unsubscribeRing = socketService.on('call:ring', ({ from, offer, isVideo }) => {
       setCallStatus('ringing');
       pendingCallerRef.current = from;
-      try {
-        if (!peerConnectionRef.current) {
-          await createPeerConnection(from, !!isVideo);
-        }
-        if (signal) {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
-          const answer = await peerConnectionRef.current.createAnswer();
-          await peerConnectionRef.current.setLocalDescription(answer);
-          socket.emit('answer-call', { to: from, signal: answer, fromUserId: getCurrentUserId() });
-        }
-      } catch (error) {
-        console.error('incoming-call error:', error);
-        setCallStatus('failed');
-      }
+      pendingOfferRef.current = offer;
+      setIsVideoCall(Boolean(isVideo));
+      setIncomingCall({ from, isVideo: Boolean(isVideo) });
+      setCallError('');
     });
 
-    socket.on('call-accepted', async ({ from, signal }) => {
+    const unsubscribeAnswer = socketService.on('call:answer', async ({ answer }) => {
       setCallStatus('connected');
       try {
-        if (peerConnectionRef.current && signal) {
-          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
+        if (peerConnectionRef.current && answer) {
+          await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         }
       } catch (error) {
-        console.error('call-accepted error:', error);
+        reportCallError('Call answer failed', error);
         setCallStatus('failed');
       }
     });
 
-    socket.on('ice-candidate', async ({ candidate }) => {
+    const unsubscribeIce = socketService.on('call:ice-candidate', async ({ candidate }) => {
       try {
         if (peerConnectionRef.current && candidate) {
           await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
         }
       } catch (error) {
-        console.error('ice-candidate error:', error);
+        reportCallError('Network candidate failed', error);
       }
     });
 
-    socket.on('call-ended', () => {
+    const unsubscribeEnd = socketService.on('call:end', () => {
       setCallStatus('ended');
       cleanupPeerConnection();
     });
 
-    socketRef.current = socket;
+    const unsubscribeFailure = socketService.on('call:failed', ({ error }) => {
+      reportCallError('Call signaling failed', new Error(error || 'Unknown signaling error'));
+      setCallStatus('failed');
+    });
+
+    const unsubscribeReject = socketService.on('call:reject', ({ reason }) => {
+      reportCallError('Call rejected', new Error(reason || 'The call was rejected'));
+      cleanupPeerConnection();
+      setCallStatus('ended');
+    });
+
+    const unsubscribeCancel = socketService.on('call:cancel', () => {
+      cleanupPeerConnection();
+      setCallStatus('ended');
+    });
+
+    socket.on('connect_error', (error) => {
+      reportCallError('Socket connection failed', error);
+      setIsConnected(false);
+    });
+
+    socketRef.currentUnsubscribe = () => {
+      unsubscribeRing();
+      unsubscribeAnswer();
+      unsubscribeIce();
+      unsubscribeEnd();
+      unsubscribeFailure();
+      unsubscribeReject();
+      unsubscribeCancel();
+    };
+
     return socket;
-  }, [cleanupPeerConnection, createPeerConnection, getCurrentUserId]);
+  }, [cleanupPeerConnection, createPeerConnection, getCurrentUserId, reportCallError]);
 
   const startCall = useCallback(async (targetUserId, isVideo = true) => {
     try {
+      setCallError('');
       const socket = ensureSocket();
       const pc = await createPeerConnection(targetUserId, isVideo);
+      setIsVideoCall(Boolean(isVideo));
       setCallStatus('calling');
       const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: !!isVideo });
       await pc.setLocalDescription(offer);
-      socket.emit('call-user', {
-        userToCall: targetUserId,
-        from: getCurrentUserId(),
-        signalData: offer,
+      socket.emit('call:initiate', {
+        to: targetUserId,
+        offer,
         isVideo: !!isVideo,
       });
     } catch (error) {
-      console.error('startCall error:', error);
+      reportCallError('Starting call failed', error);
       setCallStatus('failed');
     }
-  }, [createPeerConnection, ensureSocket, getCurrentUserId]);
+  }, [createPeerConnection, ensureSocket, reportCallError]);
 
   const answerCall = useCallback(async () => {
     try {
-      const socket = ensureSocket();
       const callerId = pendingCallerRef.current;
-      if (!callerId || !peerConnectionRef.current) return;
+      const offer = pendingOfferRef.current;
+      if (!callerId || !offer) throw new Error('No incoming call is waiting');
+
+      setCallError('');
+      const socket = ensureSocket();
+      if (!peerConnectionRef.current) {
+        await createPeerConnection(callerId, Boolean(incomingCall?.isVideo));
+      }
+
+      await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await peerConnectionRef.current.createAnswer();
       await peerConnectionRef.current.setLocalDescription(answer);
-      socket.emit('answer-call', {
-        to: callerId,
-        signal: answer,
-        fromUserId: getCurrentUserId(),
-      });
+      socket.emit('call:accept', { to: callerId, answer });
       setCallStatus('connected');
+      setIncomingCall(null);
+      pendingOfferRef.current = null;
     } catch (error) {
-      console.error('answerCall error:', error);
+      reportCallError('Answering call failed', error);
       setCallStatus('failed');
     }
-  }, [ensureSocket, getCurrentUserId]);
+  }, [createPeerConnection, ensureSocket, incomingCall?.isVideo, reportCallError]);
+
+  const rejectCall = useCallback((reason = 'Call rejected') => {
+    const callerId = pendingCallerRef.current;
+    if (callerId) socketService.send('call:reject', { to: callerId, reason });
+    pendingCallerRef.current = null;
+    pendingOfferRef.current = null;
+    setIncomingCall(null);
+    setIsVideoCall(false);
+    setCallStatus('ended');
+  }, []);
 
   const endCall = useCallback(() => {
     const socket = socketRef.current;
     const currentUserId = getCurrentUserId();
 
     if (socket && pendingCallerRef.current) {
-      socket.emit('end-call', { to: pendingCallerRef.current, targetUserId: pendingCallerRef.current });
+      socket.emit('call:end', { to: pendingCallerRef.current });
     }
 
     cleanupPeerConnection();
     setCallStatus('ended');
     pendingCallerRef.current = null;
+    pendingOfferRef.current = null;
+    setIncomingCall(null);
 
     if (socket && currentUserId) {
       socket.emit('join-user', currentUserId);
@@ -204,27 +245,33 @@ export function useWebRTCCall() {
   }, [cleanupPeerConnection, getCurrentUserId]);
 
   const toggleAudio = useCallback(() => {
-    if (!localStreamRef.current) return;
+    if (!localStreamRef.current) return false;
+    let nextMuted = isMuted;
     localStreamRef.current.getAudioTracks().forEach((track) => {
       track.enabled = !track.enabled;
+      nextMuted = !track.enabled;
     });
-  }, []);
+    setIsMuted(nextMuted);
+    return nextMuted;
+  }, [isMuted]);
 
   const toggleVideo = useCallback(() => {
-    if (!localStreamRef.current) return;
+    if (!localStreamRef.current) return false;
+    let nextCameraOff = isCameraOff;
     localStreamRef.current.getVideoTracks().forEach((track) => {
       track.enabled = !track.enabled;
+      nextCameraOff = !track.enabled;
     });
-  }, []);
+    setIsCameraOff(nextCameraOff);
+    return nextCameraOff;
+  }, [isCameraOff]);
 
   useEffect(() => {
     ensureSocket();
     return () => {
       cleanupPeerConnection();
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      socketRef.currentUnsubscribe?.();
+      socketRef.current = null;
     };
   }, [cleanupPeerConnection, ensureSocket]);
 
@@ -233,8 +280,14 @@ export function useWebRTCCall() {
     remoteStream,
     isConnected,
     callStatus,
+    callError,
+    incomingCall,
+    isMuted,
+    isCameraOff,
+    isVideoCall,
     startCall,
     answerCall,
+    rejectCall,
     endCall,
     toggleAudio,
     toggleVideo,

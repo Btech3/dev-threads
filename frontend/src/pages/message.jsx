@@ -5,10 +5,27 @@ import { assets } from '../assets/assets.js';
 import { messageService } from '../services/messageServices.js';
 import { socketService } from '../services/socketService.js';
 import { useApp } from '../context/AppContext';
+import { useWebRTCCall } from '../hooks/useWebRTCCall.js';
 
 export default function Message() {
   const { userId } = useParams();
   const { user } = useApp();
+  const {
+    localStream,
+    remoteStream,
+    callStatus,
+    callError,
+    incomingCall,
+    isVideoCall,
+    isMuted,
+    isCameraOff,
+    startCall,
+    answerCall,
+    rejectCall,
+    endCall,
+    toggleAudio,
+    toggleVideo,
+  } = useWebRTCCall();
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -22,10 +39,35 @@ export default function Message() {
   const fileInputRef = useRef(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordedAudio, setRecordedAudio] = useState(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const mediaRecorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const normalizeMessage = (payload) => {
+    const message = (payload?.message && typeof payload.message === 'object')
+      ? payload.message
+      : payload?.data?.message || payload?.data || payload;
+    if (!message || typeof message !== 'object') return null;
+    return {
+      ...message,
+      _id: message._id || message.id || `message-${message.createdAt || Date.now()}`,
+      content: message.content || '',
+      media: Array.isArray(message.media)
+        ? message.media
+        : message.media_url
+          ? [{ url: message.media_url, type: message.messageType || 'document' }]
+          : [],
+      createdAt: message.createdAt || message.created_at || new Date().toISOString()
+    };
+  };
+
+  const sameId = (left, right) => String(left || '') === String(right || '');
 
   // Fetch conversations on mount
   useEffect(() => {
@@ -43,7 +85,7 @@ export default function Message() {
             if (userObj) {
               setSelectedUser(userObj);
               const msgs = await messageService.getMessages(userId);
-              setMessages(msgs.messages || []);
+              setMessages((msgs.messages || []).map(normalizeMessage).filter(Boolean));
             }
           }
         } catch (err) {
@@ -57,9 +99,12 @@ export default function Message() {
   useEffect(() => {
     // Incoming messages
     const unsubMsg = socketService.on('messageReceived', (data) => {
-      const senderId = typeof data.senderId === 'object' ? data.senderId?._id : data.senderId;
-      if (selectedUser && senderId === (selectedUser._id || selectedUser.id)) {
-        setMessages((prev) => [...prev, data.message || data]);
+      const incoming = normalizeMessage(data);
+      const senderId = typeof data?.senderId === 'object' ? data.senderId?._id : data?.senderId;
+      const recipientId = typeof data?.recipientId === 'object' ? data.recipientId?._id : data?.recipientId;
+      const selectedId = selectedUser?._id || selectedUser?.id;
+      if (incoming && selectedUser && (sameId(senderId, selectedId) || sameId(recipientId, selectedId))) {
+        setMessages((prev) => prev.some((item) => sameId(item._id, incoming._id)) ? prev : [...prev, incoming]);
         scrollToBottom();
       }
     });
@@ -110,7 +155,7 @@ export default function Message() {
 
     try {
       const msgs = await messageService.getMessages(user._id);
-      setMessages(msgs.messages || msgs.data || []);
+      setMessages((msgs.messages || msgs.data || []).map(normalizeMessage).filter(Boolean));
       // join a room for this conversation (if server supports it)
       if (socketService.isConnected()) {
         socketService.send('join-room', { roomId: `chat:${user._id}` });
@@ -132,7 +177,7 @@ export default function Message() {
   };
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || !selectedUser) return;
+    if ((!inputMessage.trim() && selectedFiles.length === 0 && !recordedAudio) || !selectedUser) return;
 
     const tempId = `temp-${Date.now()}`;
     const outgoing = {
@@ -140,6 +185,7 @@ export default function Message() {
       senderId: user?._id || user?.id,
       recipientId: selectedUser._id || selectedUser.id,
       content: inputMessage.trim(),
+      media: [],
       createdAt: new Date().toISOString(),
       status: 'sending'
     };
@@ -148,10 +194,6 @@ export default function Message() {
     setMessages((prev) => [...prev, outgoing]);
     setInputMessage('');
     scrollToBottom();
-
-    // Simulate brief typing indicator on the other side
-    setIsTyping(true);
-    setTimeout(() => setIsTyping(false), 1200);
 
     try {
       // If there are attachments, upload them first
@@ -170,10 +212,11 @@ export default function Message() {
       }
 
       // If we recorded audio chunks, convert to blob and upload
-      if (recordedChunksRef.current.length > 0) {
-        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+      if (recordedAudio) {
         try {
-          const uploadResponse = await messageService.uploadMedia([new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' })]);
+          const recordingType = recordedAudio.type || 'application/octet-stream';
+          const extension = recordingType.includes('mp4') ? 'm4a' : recordingType.includes('ogg') ? 'ogg' : recordingType.includes('webm') ? 'webm' : 'audio';
+          const uploadResponse = await messageService.uploadMedia([new File([recordedAudio], `voice-${Date.now()}.${extension}`, { type: recordingType })]);
           mediaPayload = mediaPayload.concat(uploadResponse.media || uploadResponse.data?.media || []);
         } catch (uErr) {
           console.error('Voice upload error:', uErr);
@@ -183,17 +226,16 @@ export default function Message() {
         }
         // clear recorded data
         recordedChunksRef.current = [];
+        setRecordedAudio(null);
       }
 
       const response = await messageService.sendMessage(selectedUser._id || selectedUser.id, outgoing.content, mediaPayload);
-      const saved = response.data || response;
+      const saved = normalizeMessage(response);
       // Replace temp message with saved message when available
-      setMessages((prev) => prev.map(m => m._id === tempId ? (saved.message || saved) : m));
-
-      // notify server via socket if connected (best-effort)
-      if (socketService.isConnected()) {
-        socketService.send('message:sent', { to: selectedUser._id || selectedUser.id, message: saved.message || saved });
-      }
+      setMessages((prev) => [
+        ...prev.filter((item) => item._id !== tempId && !sameId(item._id, saved?._id)),
+        ...(saved ? [saved] : [])
+      ]);
       scrollToBottom();
       // clear attachments and previews after successful send
       setSelectedFiles([]);
@@ -203,6 +245,18 @@ export default function Message() {
       setErrorMessage(error?.message || 'Could not send message.');
       // mark failed
       setMessages((prev) => prev.map(m => m._id === tempId ? { ...m, status: 'failed' } : m));
+    }
+  };
+
+  const handleMessageInput = (event) => {
+    const value = event.target.value;
+    setInputMessage(value);
+    if (selectedUser && socketService.isConnected()) {
+      socketService.send('typing', {
+        to: selectedUser._id || selectedUser.id,
+        from: user?._id || user?.id,
+        typing: Boolean(value.trim())
+      });
     }
   };
 
@@ -228,37 +282,102 @@ export default function Message() {
   };
 
   const startRecording = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert('Recording not supported');
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setErrorMessage('Voice recording is not supported by this browser.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
       recordedChunksRef.current = [];
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      setRecordedAudio(null);
+      const supportedMimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
+      const mimeType = supportedMimeTypes
+        .find((type) => MediaRecorder.isTypeSupported(type)) || '';
+      mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
+      mediaRecorderRef.current.onstop = () => {
+        const actualMimeType = mediaRecorderRef.current?.mimeType || mimeType || 'application/octet-stream';
+        const blob = new Blob(recordedChunksRef.current, { type: actualMimeType });
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        if (blob.size === 0) {
+          setErrorMessage('The voice recorder captured no audio. Check microphone permission and try again.');
+          mediaRecorderRef.current = null;
+          return;
+        }
+        setRecordedAudio(blob);
+        mediaRecorderRef.current = null;
+      };
+      mediaRecorderRef.current.onerror = (event) => {
+        const message = event?.error?.message || 'The browser recorder failed.';
+        console.error('Record runtime error:', event?.error || event);
+        setErrorMessage(`Voice recording failed: ${message}`);
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setIsRecording(false);
+      };
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      setRecordingSeconds(0);
+      setErrorMessage('Recording voice... press the microphone again to stop.');
     } catch (err) {
       console.error('Record start error', err);
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      setErrorMessage(`Microphone error: ${err?.message || 'Permission was denied or unavailable.'}`);
     }
   };
 
   const stopRecording = () => {
     try {
-      mediaRecorderRef.current?.stop();
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.requestData?.();
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
     } catch (e) {
       console.error('Stop recording error', e);
+      setErrorMessage(`Could not stop recording: ${e?.message || 'unknown recorder error'}`);
     }
   };
+
+  useEffect(() => {
+    if (!isRecording) return undefined;
+    const intervalId = window.setInterval(() => {
+      setRecordingSeconds((seconds) => seconds + 1);
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isRecording]);
+
+  useEffect(() => () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.ondataavailable = null;
+      recorder.onstop = null;
+      recorder.onerror = null;
+      recorder.stop();
+    }
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }, []);
 
   // Call / Video actions
   const initiateCall = (type) => {
     if (!selectedUser) return;
-    socketService.send('call:request', { to: selectedUser._id || selectedUser.id, type });
-    // show calling UI (simple alert for now)
-    alert(`Calling ${selectedUser.full_name} (${type})`);
+    setErrorMessage('');
+    startCall(selectedUser._id || selectedUser.id, type === 'video');
   };
+
+  useEffect(() => {
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream || null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream || null;
+  }, [localStream, remoteStream]);
 
   const getAvatar = (user) => {
     if (user?.profile_picture) return user.profile_picture;
@@ -349,13 +468,36 @@ export default function Message() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-                  <button className="p-2 rounded-lg hover:bg-slate-50"><Phone className="w-4 h-4" /></button>
-                  <button className="p-2 rounded-lg hover:bg-slate-50"><Video className="w-4 h-4" /></button>
+                  <button onClick={() => initiateCall('voice')} className="p-2 rounded-lg hover:bg-slate-50" title="Start voice call"><Phone className="w-4 h-4" /></button>
+                  <button onClick={() => initiateCall('video')} className="p-2 rounded-lg hover:bg-slate-50" title="Start video call"><Video className="w-4 h-4" /></button>
+                  {callStatus !== 'idle' && <span className="text-xs text-slate-500">{callStatus}</span>}
                   <button onClick={() => setShowRightPanel(!showRightPanel)} className="p-2 rounded-lg hover:bg-slate-50"><Info className="w-4 h-4" /></button>
                 </div>
               </div>
 
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[#F8FAFC] p-3 sm:p-4">
+                {(callError || errorMessage) && <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{callError || errorMessage}</div>}
+                {incomingCall && callStatus === 'ringing' && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm">
+                    <span>{incomingCall.isVideo ? 'Incoming video call' : 'Incoming voice call'}</span>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={answerCall} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white">Accept</button>
+                      <button type="button" onClick={() => rejectCall()} className="rounded-lg bg-rose-600 px-3 py-2 text-xs text-white">Reject</button>
+                    </div>
+                  </div>
+                )}
+                {callStatus !== 'idle' && (localStream || remoteStream) && (
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-900 p-2">
+                    {isVideoCall && <video ref={localVideoRef} autoPlay muted playsInline className="max-h-40 w-full rounded-lg bg-black object-cover" />}
+                    {isVideoCall && <video ref={remoteVideoRef} autoPlay playsInline className="max-h-40 w-full rounded-lg bg-black object-cover" />}
+                    <div className="col-span-2 flex justify-center gap-2">
+                      <button type="button" onClick={toggleAudio} className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white">{isMuted ? 'Unmute microphone' : 'Mute microphone'}</button>
+                      <button type="button" onClick={endCall} className="rounded-lg bg-rose-600 px-3 py-2 text-xs text-white">End call</button>
+                      {isVideoCall && <button type="button" onClick={toggleVideo} className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white">{isCameraOff ? 'Turn camera on' : 'Toggle camera'}</button>}
+                    </div>
+                  </div>
+                )}
+
                 {/* Date divider */}
                 <div className="text-xs text-slate-400 text-center">TODAY</div>
 
@@ -364,14 +506,28 @@ export default function Message() {
                 )}
 
                 {messages.map((msg) => {
-                  const isMe = msg.senderId?._id === user?._id || msg.senderId === user?._id || msg.senderId === (user?._id || user?.id);
+                  const normalizedMessage = normalizeMessage(msg);
+                  if (!normalizedMessage) return null;
+                  const isMe = normalizedMessage.senderId?._id === user?._id || normalizedMessage.senderId === user?._id || normalizedMessage.senderId === (user?._id || user?.id);
+                  const messageMedia = normalizedMessage.media || [];
                   return (
-                    <div key={msg._id || Math.random()} className={`flex items-end ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div key={normalizedMessage._id} className={`flex items-end ${isMe ? 'justify-end' : 'justify-start'}`}>
                       {!isMe && <img src={getAvatar(selectedUser)} alt="avatar" className="w-8 h-8 rounded-full mr-2" />}
                       <div className={`max-w-[85%] rounded-2xl p-3 sm:max-w-[68%] ${isMe ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-900'}`}>
-                        <div className="break-words whitespace-pre-wrap">{msg.content}</div>
+                        {normalizedMessage.content && <div className="break-words whitespace-pre-wrap">{normalizedMessage.content}</div>}
+                        {messageMedia.length > 0 && <div className="mt-2 grid max-w-full gap-2">
+                          {messageMedia.map((media, index) => {
+                            const mediaType = String(media.type || media.mimetype || '').toLowerCase();
+                            const url = media.url || media.mediaUrl;
+                            if (!url) return null;
+                            if (mediaType.includes('video')) return <video key={`${url}-${index}`} src={url} controls className="max-h-60 max-w-full rounded-lg" />;
+                            if (mediaType.includes('audio')) return <audio key={`${url}-${index}`} src={url} controls className="max-w-full" />;
+                            if (mediaType.includes('image')) return <img key={`${url}-${index}`} src={url} alt={media.fileName || 'Shared media'} className="max-h-60 max-w-full rounded-lg object-contain" />;
+                            return <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="block max-w-full break-all text-xs underline">{media.fileName || 'Open shared document'}</a>;
+                          })}
+                        </div>}
                         <div className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'} flex items-center gap-2 justify-end`}>
-                          <span>{new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                          <span>{new Date(normalizedMessage.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                           {isMe && <Check className="w-3 h-3" />}
                         </div>
                       </div>
@@ -430,22 +586,23 @@ export default function Message() {
                     <input
                       type="text"
                       value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
+                      onChange={handleMessageInput}
                       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                       placeholder="Type a message..."
                       className="min-w-0 w-full max-w-full flex-1 rounded-full border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none sm:px-4"
                       disabled={!selectedUser}
                     />
 
-                    <button onClick={sendMessage} className="rounded-full bg-indigo-600 p-3 text-white disabled:opacity-50" disabled={!selectedUser || (!inputMessage.trim() && selectedFiles.length===0 && recordedChunksRef.current.length===0)}>
+                    <button onClick={sendMessage} className="rounded-full bg-indigo-600 p-3 text-white disabled:opacity-50" disabled={!selectedUser || (!inputMessage.trim() && selectedFiles.length===0 && !recordedAudio)}>
                       <Send className="w-4 h-4" />
                     </button>
 
                     {!isRecording ? (
-                      <button onClick={startRecording} className="p-2 rounded-full hover:bg-slate-50"><Mic className="w-5 h-5 text-slate-500" /></button>
+                      <button onClick={startRecording} className="p-2 rounded-full hover:bg-slate-50" title="Record voice note"><Mic className="w-5 h-5 text-slate-500" /></button>
                     ) : (
-                      <button onClick={stopRecording} className="p-2 rounded-full bg-rose-500 text-white"><Mic className="w-5 h-5" /></button>
+                      <button onClick={stopRecording} className="flex items-center gap-1 rounded-full bg-rose-500 px-2 py-1 text-white" title="Stop recording"><span className="h-2 w-2 animate-pulse rounded-full bg-white" /><span className="text-xs tabular-nums">{String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')}</span><Mic className="h-5 w-5" /></button>
                     )}
+                    {recordedAudio && !isRecording && <span className="text-xs text-emerald-600">Voice note ready</span>}
                   </div>
                 </div>
               </div>

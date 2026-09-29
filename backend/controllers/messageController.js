@@ -79,7 +79,7 @@ export const getConversations = async (req, res) => {
         profile_picture: conv.user.profile_picture,
         username: conv.user.username
       },
-      lastMessage: conv.lastMessage.content,
+      lastMessage: conv.lastMessage.content || (conv.lastMessage.media?.length ? 'Shared media' : ''),
       lastMessageTime: conv.lastMessage.createdAt,
       unreadCount: conv.unreadCount
     }));

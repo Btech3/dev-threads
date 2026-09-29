@@ -3,11 +3,7 @@ import Post from '../models/Post.js';
 import User from '../models/User.js';
 import { sendNotification } from '../utils/notifications.js';
 import { getIO } from '../config/socket.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { imageKit } from '../config/imagekit.js';
 
 /**
  * @swagger
@@ -210,8 +206,6 @@ export const getUserPosts = async (req, res) => {
  *         description: Server error - database or file processing failure
  */
 export const createPost = async (req, res) => {
-  let uploadedFiles = [];
-  
   try {
     const { content } = req.body;
     const userId = req.userId; // From auth middleware
@@ -222,14 +216,14 @@ export const createPost = async (req, res) => {
     // ============================================
     
     // Validate content
-    if (!content || !content.trim()) {
+    if ((!content || !content.trim()) && files.length === 0) {
       return res.status(400).json({
-        error: 'Post content is required',
-        code: 'MISSING_CONTENT'
+        error: 'Post must have content or media',
+        code: 'EMPTY_POST'
       });
     }
 
-    if (content.length > 5000) {
+    if (content && content.length > 5000) {
       return res.status(400).json({
         error: 'Post exceeds maximum length of 5000 characters',
         code: 'CONTENT_TOO_LONG'
@@ -237,7 +231,7 @@ export const createPost = async (req, res) => {
     }
 
     // Validate that at least content exists
-    if (content.trim().length === 0 && files.length === 0) {
+    if ((!content || content.trim().length === 0) && files.length === 0) {
       return res.status(400).json({
         error: 'Post must have either content or media',
         code: 'EMPTY_POST'
@@ -259,21 +253,28 @@ export const createPost = async (req, res) => {
         });
       }
 
-      // Process each file
+      // Upload each file directly to ImageKit. Render instances have ephemeral
+      // filesystems, so post media must not be stored under ./uploads.
       for (const file of files) {
         try {
+          const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
+          const imageKitResponse = await imageKit.upload({
+            file: file.buffer,
+            fileName: `post-${userId}-${Date.now()}-${safeName}`,
+            folder: '/dev-thread/posts'
+          });
+
           const mediaItem = {
             type: getMediaType(file.mimetype),
-            url: `/uploads/posts/${file.filename}`, // Serve via /uploads
+            url: imageKitResponse.url,
             mimetype: file.mimetype,
             size: file.size,
             uploadedAt: new Date()
           };
           
           mediaArray.push(mediaItem);
-          uploadedFiles.push(file.path || file.filename);
           
-          console.log(`✅ File processed: ${file.originalname} (${file.size} bytes)`);
+          console.log(`✅ File uploaded to ImageKit: ${file.originalname} (${file.size} bytes)`);
         } catch (fileError) {
           console.error(`❌ File processing error for ${file.originalname}:`, fileError);
           throw new Error(`Failed to process file: ${file.originalname}`);
@@ -287,7 +288,7 @@ export const createPost = async (req, res) => {
 
     const post = new Post({
       userId,
-      content: content.trim(),
+      content: content?.trim() || '',
       media: mediaArray,
       likes: [],
       comments: [],
@@ -347,7 +348,7 @@ export const createPost = async (req, res) => {
           body: JSON.stringify({
             userId,
             postId: post._id,
-            content: content.substring(0, 100),
+            content: (content || '').substring(0, 100),
             mediaCount: mediaArray.length
           })
         }).catch(err => console.warn('INNGEST event warning:', err.message));
@@ -375,16 +376,6 @@ export const createPost = async (req, res) => {
     // ============================================
 
     console.error('❌ Post creation error:', error);
-
-    // Clean up uploaded files on error
-    for (const filePath of uploadedFiles) {
-      try {
-        await fs.unlink(filePath);
-        console.log(`🧹 Cleaned up failed upload: ${filePath}`);
-      } catch (cleanupError) {
-        console.warn(`Warning: Could not delete file ${filePath}:`, cleanupError.message);
-      }
-    }
 
     // Determine error type and respond appropriately
     if (error.code === 'LIMIT_FILE_SIZE') {

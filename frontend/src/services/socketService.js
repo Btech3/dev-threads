@@ -24,14 +24,28 @@ class SocketService {
     this.listeners = {};
   }
 
+  getSocket() {
+    if (!this.socket) {
+      const currentClerkId = localStorage.getItem('clerkId');
+      const currentUserId = localStorage.getItem('backendUserId') || currentClerkId;
+      return this.connect(currentClerkId, currentUserId);
+    }
+
+    return this.socket;
+  }
+
   // Connect to socket server
-  connect(clerkId) {
-    if (this.socket?.connected) return;
+  connect(clerkId, backendUserId = clerkId) {
+    if (this.socket?.connected) return this.socket;
+
+    const socketAuth = {
+      token: localStorage.getItem('authToken') || null,
+      clerkId: clerkId || backendUserId || null,
+      userId: backendUserId || clerkId || null,
+    };
 
     this.socket = io(SOCKET_URL, {
-      auth: {
-        clerkId
-      },
+      auth: socketAuth,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -41,15 +55,16 @@ class SocketService {
     // Connection event
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket.id);
-      
+
       // Join feed room for real-time updates
       this.socket.emit('join-feed');
-      
+
       // Join user room for profile and personal notifications
-      if (clerkId) {
-        this.socket.emit('join-user', clerkId);
+      const userIdentity = backendUserId || clerkId || localStorage.getItem('backendUserId') || localStorage.getItem('clerkId');
+      if (userIdentity) {
+        this.socket.emit('join-user', userIdentity);
       }
-      
+
       this.emit('socketConnected', { socketId: this.socket.id });
     });
 
@@ -170,6 +185,14 @@ class SocketService {
       console.log('📡 Socket Event: message:read', data);
       this.emit('messageRead', data);
     });
+
+    this.socket.on('call:ring', (data) => this.emit('call:ring', data));
+    this.socket.on('call:answer', (data) => this.emit('call:answer', data));
+    this.socket.on('call:reject', (data) => this.emit('call:reject', data));
+    this.socket.on('call:cancel', (data) => this.emit('call:cancel', data));
+    this.socket.on('call:ice-candidate', (data) => this.emit('call:ice-candidate', data));
+    this.socket.on('call:end', (data) => this.emit('call:end', data));
+    this.socket.on('call:failed', (data) => this.emit('call:failed', data));
     
     this.socket.on('typing', (data) => {
       this.emit('typing', data);

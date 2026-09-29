@@ -18,11 +18,14 @@ export function AppProvider({ children }) {
     const shouldConnect = !!appUser?._id;
 
     if (shouldConnect) {
+      const clerkId = appUser?.clerkId || localStorage.getItem('clerkId');
+      const backendUserId = appUser?._id;
+
       // Save backend user ID to localStorage for API use
-      localStorage.setItem('backendUserId', appUser._id);
-      
-      // Connect socket using backend userId so server emits match the joined room
-      socketService.connect(appUser._id);
+      localStorage.setItem('backendUserId', backendUserId);
+
+      // Connect once using a consistent identity pair for auth and room membership.
+      socketService.connect(clerkId, backendUserId);
 
       // Listen for real-time events
       const handleSocketPostCreated = (data) => {

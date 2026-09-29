@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import User from '../models/User.js';
 import { verifyClerkToken } from '../middleware/auth.js';
-import { imageKit, uploadToImageKit, getOptimizedImageUrl } from '../config/imagekit.js';
+import { imageKit, uploadToImageKit, getOptimizedImageUrl, assertImageKitConfigured } from '../config/imagekit.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -19,6 +19,7 @@ const resolveMessageType = (file = {}) => {
 
 const handleMediaUpload = async (req, res) => {
   try {
+    assertImageKitConfigured();
     const files = req.files || (req.file ? [req.file] : []);
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
@@ -59,7 +60,10 @@ const handleMediaUpload = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+    res.status(500).json({
+      error: 'Upload failed',
+      details: process.env.NODE_ENV === 'production' ? undefined : error?.message
+    });
   }
 };
 
@@ -73,6 +77,7 @@ const handleMediaUpload = async (req, res) => {
  */
 router.post('/profile-picture', verifyClerkToken, upload.single('file'), async (req, res) => {
   try {
+    assertImageKitConfigured();
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
     }
@@ -114,6 +119,7 @@ router.post('/profile-picture', verifyClerkToken, upload.single('file'), async (
  */
 router.post('/post-media', verifyClerkToken, upload.array('files', 5), async (req, res) => {
   try {
+    assertImageKitConfigured();
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
     }
@@ -145,6 +151,7 @@ router.post('/post-media', verifyClerkToken, upload.array('files', 5), async (re
 
 router.post('/cover-photo', verifyClerkToken, upload.single('file'), async (req, res) => {
   try {
+    assertImageKitConfigured();
     if (!req.file) {
       return res.status(400).json({ error: 'No cover photo file provided' });
     }
